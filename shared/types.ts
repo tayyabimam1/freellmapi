@@ -64,6 +64,37 @@ export type Platform =
   | 'google'
   | 'groq'
   | 'cerebras'
+  // Sail Research — native Responses API provider. $5 in free credits refreshes
+  // monthly when a payment method is attached; usage beyond the grant is
+  // pay-as-you-go. Background polling is required for its flex-only models.
+  | 'sail'
+  // Responses-only gateway; a shared monthly free allowance, not per model.
+  | 'aclide'
+  // OpenAI-compatible chat and embeddings; one shared $1 monthly allowance.
+  | 'speka'
+  // Selected zero-priced routes have daily/rolling quotas without a top-up;
+  // signed catalog only. The public roster also includes paid/promotional IDs.
+  | 'llmtr'
+  // Hosted vision API: $5/workspace in recurring monthly credits, shared
+  // across models. Signed catalog only; no bundled model seeds.
+  | 'moondream'
+  // Hosted gateways; model rows are delivered by the signed catalog only.
+  // ElectronHub renews weekly credits; Experiential renews monthly credits.
+  | 'electronhub'
+  | 'experiential'
+  // Catalog-managed gateways: monthly shared credits vs daily free-model quota.
+  | 'router9'
+  | 'septor'
+  | 'clod'
+  | 'speechify'
+  | 'blaze'
+  // Lucidity Composite, Api.Airforce and DreamPrompting expose daily free
+  // allowances; Waterfall and Logfare publish community / fair-use tiers.
+  | 'lucidity'
+  | 'airforce'
+  | 'dreamprompting'
+  | 'waterfall'
+  | 'logfare'
   // B.AI — OpenAI-compatible gateway. Its catalog row is a live-tested,
   // limited-time 0-credit promotion, not a recurring free allowance.
   | 'bai'
@@ -72,6 +103,10 @@ export type Platform =
   // published. Catalog rows live in the hosted catalog (premium now, free after
   // 30 days).
   | 'anyapi'
+  // AMD Radeon Cloud TokenFactory — OpenAI-compatible shared inference. Its
+  // rotating public-model roster is free without consuming instance credits,
+  // with recurring account-level allowance and request/concurrency controls.
+  | 'radeon'
   | 'nvidia'
   | 'mistral'
   | 'sambanova'
@@ -96,8 +131,8 @@ export type Platform =
   // platform.agnes-ai.com (no card).
   | 'agnes'
   // Reka — OpenAI-compatible. Native multimodal models (reka-edge takes
-  // image/video); free via a recurring monthly credit grant, key from
-  // platform.reka.ai (no card).
+  // image/video). New accounts need prepaid credits (#1202); key from
+  // platform.reka.ai.
   | 'reka'
   // SiliconFlow — OpenAI-compatible. Registered for its FREE generative-media
   // models (FLUX.1-schnell image, CosyVoice2 TTS) routed via services/media.ts;
@@ -219,6 +254,11 @@ export interface Model {
   enabled: boolean;
   supportsVision: boolean;
   supportsTools: boolean;
+  /** 'discovered': fetched from a built-in provider's own /models because the
+   *  catalog carries no models for it (#1348). */
+  source?: 'catalog' | 'custom' | 'discovered';
+  keyId?: number | null;
+  endpointScope?: string | null;
 }
 
 // ---- Quirks ----
@@ -275,7 +315,12 @@ export interface ApiKey {
   baseUrl: string | null;
   status: KeyStatus;
   enabled: boolean;
+  /** This row is the anonymous sentinel of a key-optional platform: there is
+   *  no credential to copy, scope or reveal. */
   keyless: boolean;
+  /** The platform works with or without a key (Kilo, OVH, AI Horde), so a key
+   *  can be added to or left off this row (#1331). */
+  keyOptional?: boolean;
   /** Whether an export file would actually contain this row. The server decides
    *  it so the dialog's "will export N keys" cannot drift from the export. */
   exportable: boolean;
@@ -285,8 +330,20 @@ export interface ApiKey {
   /** Model ids this key is limited to; null = serves every model of its
    *  platform (#657). */
   modelScope?: string[] | null;
+  /** Per-key monthly request cap (0 = unlimited, #1158). */
+  monthlyRequestCap?: number;
+  /** Per-key monthly token cap (0 = unlimited, #1158). */
+  monthlyTokenCap?: number;
+  /** Current UTC month's successful usage against the caps above, with the
+   *  ISO time of the next monthly reset. */
+  monthlyUsage?: { requests: number; tokens: number; resetsAt: string };
+  /** The per-key proxy override with its password masked (#590); '' = none. */
+  maskedProxyUrl?: string;
   models?: ApiKeyModel[];
   cooldowns?: ApiKeyCooldown[];
+  /** True for a built-in provider key whose platform the catalog carries no
+   *  models for, so the dashboard offers Fetch models on it (#1348). */
+  modelDiscovery?: boolean;
 }
 
 export interface ApiKeyCreate {
@@ -391,6 +448,11 @@ export interface ChatMessage {
   // (DeepSeek on OpenCode Zen) require it to be replayed verbatim on the next
   // turn or they 400; the proxy preserves and forwards it. See issue #255.
   reasoning_content?: string;
+  // Moonshot's "partial" prefill flag on an assistant turn: when true, the
+  // model continues the given text instead of starting a fresh turn. Only
+  // forwarded to models that understand it (Moonshot/Kimi); stripped for all
+  // other providers. See issue #1038.
+  partial?: boolean;
 }
 
 export interface ChatCompletionRequest {
@@ -427,6 +489,10 @@ export interface TokenUsage {
   // to its chars/4 estimate when absent. (#764)
   completion_tokens_details?: { reasoning_tokens?: number };
   prompt_tokens_details?: { cached_tokens?: number };
+  // Gateway-synthesized block (upstream never sent usage): flagged so a
+  // cost-accounting client can tell it apart from the upstream's real
+  // counts. (#1084)
+  estimated?: boolean;
 }
 
 export interface ChatCompletionResponse {
@@ -544,4 +610,77 @@ export interface ProviderQuotaObservation extends ProviderQuotaState {
   endpoint: string | null;
   rawJson: string | null;
   createdAt: string;
+}
+
+export interface QuotaOutlookPool {
+  platform: Platform;
+  pool: string;
+  limit: number | null;
+  remaining: number | null;
+  remainingPct: number | null;
+  observedAt: string | null;
+  resetAt: string | null;
+  /** Successful requests through this instance during the observation window. */
+  recentRequestCount: number;
+  ratePerMin: number;
+  unavailableReason: 'quota_not_reported' | 'stale_observation' | 'reset_not_reported' | 'low_confidence' | null;
+  estimatedExhaustionAt: string | null;
+  status: 'unknown' | 'stale' | 'unavailable' | 'insufficient_data' | 'resets_first' | 'forecast' | 'exhausted';
+  warning: 'low_balance' | 'exhausting_soon' | null;
+}
+
+export interface QuotaOutlookResponse {
+  generatedAt: string;
+  observationWindowMinutes: number;
+  minimumRequests: number;
+  pools: QuotaOutlookPool[];
+}
+
+// ---- Provider Dashboard Types ----
+
+export type ProviderHealthStatus = 'healthy' | 'issues' | 'rate_limited' | 'unknown' | 'unconfigured';
+
+export interface ProviderSummary {
+  platform: Platform;
+  name: string;
+  totalKeys: number;
+  enabledKeys: number;
+  healthyKeys: number;
+  totalModels: number;
+  activeModels: number;
+  status: ProviderHealthStatus;
+  isConfigured: boolean;
+}
+
+export interface GroupedProvider {
+  id: string;
+  platform: Platform;
+  name: string;
+  url?: string;
+  baseUrl?: string | null;
+  endpointScope?: string | null;
+  keyless?: boolean;
+  keys: ApiKey[];
+  models: Model[];
+  summary: ProviderSummary;
+}
+
+export interface CustomModelCreate {
+  platform: Platform;
+  modelId: string;
+  displayName?: string;
+  contextWindow?: number | null;
+  rpmLimit?: number | null;
+  rpdLimit?: number | null;
+  tpmLimit?: number | null;
+  tpdLimit?: number | null;
+  supportsVision?: boolean;
+  supportsTools?: boolean;
+}
+
+export interface ModelTestResult {
+  success: boolean;
+  modelId: string;
+  latencyMs: number;
+  error?: string;
 }

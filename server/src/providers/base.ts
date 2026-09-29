@@ -19,6 +19,8 @@ import { extractThinkTagsFromStream } from '../lib/think-tags.js';
 export interface ProviderHttpError extends Error {
   status?: number;
   retryAfterMs?: number;
+  /** Explicit daily-window violation from structured upstream quota details. */
+  dailyQuotaExhausted?: boolean;
 }
 
 /** Upper bound on a provider-supplied back-off. A malformed or hostile
@@ -163,6 +165,9 @@ export interface CompletionOptions extends ExtendedSamplingOptions {
   stream_options?: {
     include_usage?: boolean;
   };
+  /** Remaining context budget (context_window − estimated_input_tokens) for
+   *  this route. resolveMaxTokens clamps max_tokens to fit. */
+  contextBudget?: number;
   /** Per-call HTTP timeout override. Not part of the OpenAI wire format (it is
    * stripped before the request body is built); used by the probe script so
    * NVIDIA's 15-60s serverless cold starts don't read as failures. */
@@ -249,6 +254,12 @@ export abstract class BaseProvider {
    */
   protected async validationResult(res: Response): Promise<KeyValidationResult> {
     if (res.status !== 401 && res.status !== 403) return true;
+    // A Cloudflare bot challenge ("Just a moment...") is a 403 about the
+    // caller's IP and User-Agent, not about the key. Surface it as
+    // inconclusive so health never auto-disables a good key behind it (#1298).
+    if (res.headers?.get('cf-mitigated') === 'challenge') {
+      throw providerHttpError(res, `${this.name} key validation blocked by a Cloudflare challenge (HTTP ${res.status}); the key was not checked`);
+    }
 
     let body: any = null;
     try {
@@ -451,8 +462,8 @@ export abstract class BaseProvider {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const data = trimmed.slice(6);
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).replace(/^ /, '');
           if (data === '[DONE]') return;
           try {
             const chunk = JSON.parse(data) as ChatCompletionChunk;

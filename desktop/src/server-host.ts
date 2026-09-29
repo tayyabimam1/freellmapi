@@ -16,8 +16,10 @@ import { startHealthChecker, checkAllKeys } from '../../server/src/services/heal
 import { startCatalogSync } from '../../server/src/services/catalog-sync.js';
 import { startCooldownProbe } from '../../server/src/services/cooldown-probe.js';
 import { startCustomModelSync } from '../../server/src/services/custom-model-sync.js';
+import { startBuiltinModelDiscovery } from '../../server/src/services/builtin-model-discovery.js';
 import { startBackupScheduler } from '../../server/src/services/backups.js';
 import { cleanupExpiredCooldowns } from '../../server/src/services/ratelimit.js';
+import { loadCacheFromDb } from '../../server/src/services/cache.js';
 import { startWakeDetect } from '../../server/src/lib/wake-detect.js';
 import { installProcessSafetyNet } from '../../server/src/lib/process-safety-net.js';
 import { installLogRedaction } from '../../server/src/lib/log-redaction.js';
@@ -96,6 +98,10 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   // the URL saved in the settings table is ignored on every restart and the
   // outbound proxy fields appear empty until re-saved.
   restoreProxySettings();
+  // Rehydrate the persisted response cache, same as server/src/index.ts. The
+  // desktop app is restarted far more often than a server (every quit, every
+  // update), so without this the cache is effectively never warm here.
+  loadCacheFromDb();
   const app = createApp();
   const { server, port } = await listenWithScan(app, opts.host, opts.preferredPort);
   // Background timers need a Scheduler since the abstraction landed (4cbb571);
@@ -107,6 +113,7 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   startCooldownProbe(scheduler);
   startBackupScheduler(scheduler);
   startCustomModelSync(getDb(), scheduler);
+  startBuiltinModelDiscovery(getDb(), scheduler);
   // Post-sleep recovery — the menu-bar app on a laptop is the canonical
   // lid-close case: flush pooled sockets and force-re-probe every key so the
   // first request after wake doesn't ride a dead connection or a pre-sleep

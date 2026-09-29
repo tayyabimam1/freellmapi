@@ -47,6 +47,15 @@ import AgentsPage from '@/pages/AgentsPage'
 // silently. A page that already shows the failure inline can opt out with
 // `meta: { silenceToast: true }` on the mutation.
 const queryClient = new QueryClient({
+  // staleTime dedupes the mount storm (#1047) and keeps page-to-page
+  // navigation off the network: the Models page alone mounts ~13 queries,
+  // several of them the same endpoint from different components, and
+  // staleTime 0 refetched every one of them on every navigation and window
+  // focus. Cached data renders immediately either way; this only decides
+  // whether a background refetch follows. Thirty seconds is shorter than any
+  // poller here (refetchInterval still fires on its own clock), and mutations
+  // invalidate explicitly, so nothing user-visible goes stale.
+  defaultOptions: { queries: { staleTime: 30_000 } },
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.meta?.silenceToast) return
@@ -137,12 +146,23 @@ function Brand() {
 const isDesktopApp = typeof window !== 'undefined'
   && (window as Window & { __FREEAPI_DESKTOP__?: boolean }).__FREEAPI_DESKTOP__ === true
 
+const desktopPlatform = typeof window !== 'undefined'
+  ? (window as Window & { __FREEAPI_PLATFORM__?: string }).__FREEAPI_PLATFORM__
+  : undefined
+
+const isMacDesktop = isDesktopApp && (
+  desktopPlatform ? desktopPlatform === 'darwin' : (typeof navigator !== 'undefined' && /Macintosh|Mac OS X/.test(navigator.userAgent))
+)
+
 // The preload's own early classList.add can be lost (it may run before this
 // document exists), so the client claims the class itself at module load —
 // before the first React paint — keeping html.desktop CSS (transparent body,
-// glass backdrop) reliable.
+// glass backdrop on macOS) reliable.
 if (isDesktopApp) {
   document.documentElement.classList.add('desktop')
+  if (isMacDesktop) {
+    document.documentElement.classList.add('desktop-mac')
+  }
 }
 
 function AccountMenuItems({
@@ -215,17 +235,17 @@ function Navbar() {
   return (
     <>
       <header
-        // In the desktop shell the body backdrop is already translucent glass;
-        // a lighter wash keeps the title bar from looking more solid than the page.
-        className={`sticky top-0 z-40 border-b backdrop-blur ${isDesktopApp ? 'bg-background/45' : 'bg-background/80'}`}
+        // In macOS desktop shell the window carries vibrancy blur, so a lighter wash (45%)
+        // lets it read as glass. Everywhere else (Windows/Linux/browser), use solid wash (80%)
+        // so text and contrast stay sharp and readable.
+        className={`sticky top-0 z-40 border-b backdrop-blur ${isMacDesktop ? 'bg-background/45' : 'bg-background/80'}`}
         style={isDesktopApp ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
       >
         <div
-          // Physical pl (not logical ps): the gutter reserves the macOS
-          // traffic lights, which stay top-left even when an RTL locale
-          // flips the document direction.
-          className={`mx-auto flex max-w-6xl items-center px-4 sm:px-6 ${isDesktopApp ? 'pl-20 sm:pl-20' : ''}`}
-          style={isDesktopApp ? { minHeight: 52 } : undefined}
+          // Physical pl: reserves macOS traffic lights only on macOS. On Windows and Linux,
+          // standard window controls sit on the top-right, so no left padding is needed.
+          className={`mx-auto flex max-w-6xl items-center px-4 sm:px-6 ${isMacDesktop ? 'pl-20 sm:pl-20' : ''}`}
+          style={isMacDesktop ? { minHeight: 52 } : undefined}
         >
           <Brand />
           <nav
@@ -399,6 +419,21 @@ function PageContainer({ children }: { children: ReactNode }) {
   )
 }
 
+// The shell column. Padded routes keep `min-h-screen` and scroll as a document;
+// a full-bleed route pins the shell to the dynamic viewport instead, because
+// min-height alone is a floor, not a ceiling: with an indefinite shell height
+// every flex-1 container below grows with its content and the document scrolls
+// rather than the one pane (the Playground transcript) that means to.
+function AppShell({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const fullBleed = FULL_BLEED_ROUTES.has(location.pathname)
+  return (
+    <div className={`flex flex-col ${fullBleed ? 'h-dvh overflow-hidden' : 'min-h-screen'} ${isMacDesktop ? 'desktop-backdrop' : 'bg-background'}`}>
+      {children}
+    </div>
+  )
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -410,7 +445,7 @@ function App() {
                   leaves without anyone having to know how tall the navbar is.
                   Fixed-position children (toaster, palette, reminder) are out of
                   flow, and a padded route stretches to nothing it can show. */}
-              <div className={`flex min-h-screen flex-col ${isDesktopApp ? 'desktop-backdrop' : 'bg-background'}`}>
+              <AppShell>
                 <Navbar />
                 <PageContainer>
                   <PageBoundary>
@@ -445,7 +480,7 @@ function App() {
                 <Toaster />
                 <CommandPalette />
                 <UpdateReminder />
-              </div>
+              </AppShell>
             </AuthGate>
           </BrowserRouter>
         </I18nProvider>
