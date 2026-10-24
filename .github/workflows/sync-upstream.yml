@@ -6,9 +6,6 @@ on:
     - cron: "0 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 concurrency:
   group: sync-upstream
 
@@ -16,14 +13,27 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Sync main from upstream tashfeenahmed/freellmapi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Uses the repo-scoped write deploy key (DEPLOY_KEY secret) because
+      # GITHUB_TOKEN is not allowed to push changes to workflow files.
+      - name: Checkout fork
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Merge upstream/main into fork main
         run: |
-          result=$(gh api -X POST repos/tayyabimam1/freellmapi/merge-upstream \
-            -f branch=main --jq '.merge_type')
-          case "$result" in
-            merge|fast-forward) echo "Fork updated from upstream ($result)." ;;
-            none) echo "Fork is already up to date with upstream." ;;
-            *) echo "Unexpected merge_type: $result"; exit 1 ;;
-          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/tashfeenahmed/freellmapi.git
+          git fetch upstream main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork is already up to date with upstream."
+            exit 0
+          fi
+
+          git merge --no-edit upstream/main
+          git push origin main
+          echo "Fork updated from upstream."
