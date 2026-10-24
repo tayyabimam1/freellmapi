@@ -5,7 +5,8 @@ import { togglePopover } from './popover.js';
 import { openDashboard } from './window.js';
 import { openLogsFolder, openBackupsFolder } from './logger.js';
 import { dt, type NativeLocale } from './i18n.js';
-import { trayPlatform } from './tray-platform.js';
+import { trayMenuOffersPopover, trayPlatform } from './tray-platform.js';
+import type { UpdateState } from './update-support.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,8 @@ export function buildTray(
   onToggleLanAccess: () => void,
   getShowInDock: () => boolean,
   onToggleShowInDock: () => void,
+  getUpdateState: () => UpdateState,
+  onUpdateClick: () => void,
 ): Tray {
   const platform = trayPlatform(process.platform);
   const iconPath = path.join(__dirname, '../assets', platform.iconFile);
@@ -48,6 +51,12 @@ export function buildTray(
     tray!.popUpContextMenu(Menu.buildFromTemplate([
       { label: dt(locale, 'runningOn', { addr: `${lanOn ? '0.0.0.0' : '127.0.0.1'}:${port}` }), enabled: false },
       { label: dt(locale, 'openDashboard'), click: () => openDashboard(port, token) },
+      // #1412: on Windows left-click deliberately opens the dashboard instead of
+      // the popover (#1353), which used to leave the compact panel with no entry
+      // point at all. Only offer it where the click does not already toggle it.
+      ...(trayMenuOffersPopover(process.platform)
+        ? [{ label: dt(locale, 'showCompactPanel'), click: () => togglePopover(tray!) }]
+        : []),
       { type: 'separator' },
       // Toggling relaunches the app (the bind host is fixed at server start).
       { label: dt(locale, 'lanAccess'), type: 'checkbox', checked: lanOn, click: () => onToggleLanAccess() },
@@ -62,11 +71,18 @@ export function buildTray(
       // only shows relative paths, so the tray is the discovery point.
       { label: dt(locale, 'openBackups'), click: () => openBackupsFolder() },
       { type: 'separator' },
+      { label: updateLabel(locale, getUpdateState()), click: () => onUpdateClick() },
       { label: dt(locale, 'quitApp'), click: () => app.quit() },
     ]));
   });
 
   return tray;
+}
+
+function updateLabel(locale: NativeLocale, state: UpdateState): string {
+  return state.phase === 'ready'
+    ? dt(locale, 'restartToUpdateTray', { version: state.version })
+    : dt(locale, 'checkForUpdates');
 }
 
 // Update the static tooltip after a locale change (the menu reads the locale
