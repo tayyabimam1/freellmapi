@@ -432,6 +432,8 @@ export const platformColors: Record<string, string> = {
   gizmo:       '#7c3aed',
   blockrun:    '#2563eb',
   moondream:   '#6d5dfc',
+  jamai:       '#24a19c',
+  nabh:        '#0ea5e9',
   electronhub: '#6366f1',
   experiential: '#14b8a6',
   router9:      '#8b5cf6',

@@ -101,6 +101,9 @@ export type Platform =
   // Hosted vision API: $5/workspace in recurring monthly credits, shared
   // across models. Signed catalog only; no bundled model seeds.
   | 'moondream'
+  | 'jamai'
+  // One shared renewable monthly credit allowance; signed catalog only.
+  | 'nabh'
   // Hosted gateways; model rows are delivered by the signed catalog only.
   // ElectronHub renews weekly credits; Experiential renews monthly credits.
   | 'electronhub'
