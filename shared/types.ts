@@ -122,6 +122,8 @@ export type Platform =
   | 'septor'
   | 'clod'
   | 'speechify'
+  // TTS-only providers; free-plan models are published in the media catalog.
+  | 'cartesia'
   // Self-hosted TTS: shared 30K tokens/day and 1K API requests/month, no card.
   // Model rows arrive only through the signed, freshness-gated catalog.
   | 'freeai'

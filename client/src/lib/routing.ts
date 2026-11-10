@@ -474,6 +474,7 @@ export const platformColors: Record<string, string> = {
   navy:         '#1d4ed8',
   nara:         '#2563eb',
   sealion:     '#0ea5e9',
+  cartesia:    '#f97316',
   orcarouter:  '#f97316',
   unorouter:   '#ec4899',
   xkiro:       '#a855f7',
