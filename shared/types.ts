@@ -61,6 +61,8 @@ export interface ImportSelectedResponse {
 // SambaNova was dropped in V23 (free tier permanently retired — 402
 // "payment method required" once the one-time $5 trial credit lapses).
 export type Platform =
+  // OpenAI-compatible gateway; only signed-catalog models may be selected.
+  | 'tokenreply'
   | 'google'
   | 'groq'
   | 'cerebras'
