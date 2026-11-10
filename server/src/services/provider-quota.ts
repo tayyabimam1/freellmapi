@@ -173,6 +173,7 @@ export function inferPoolForPlatform(platform: Platform, modelId?: string | null
   if (platform === 'navy') return 'navy::free';
   if (platform === 'nara') return 'nara::free';
   if (platform === 'sealion') return 'sealion::free';
+  if (platform === 'tinyfish') return 'tinyfish::free-search';
   // OrcaRouter: one rate-limited free allowance across all `*-free` aliases
   // and the `orcarouter/free` auto route (limits unpublished; 429 on cap).
   if (platform === 'orcarouter') return 'orcarouter::free';
@@ -203,7 +204,7 @@ function isSharedPool(platform: Platform): boolean {
   if (platform === 'speka') return true;
   if (platform === 'plugsky') return true;
   if (platform === 'inferbase' || platform === 'simplellm') return true;
-  if (['electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare'].includes(platform)) return true;
+  if (['electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare', 'tinyfish'].includes(platform)) return true;
   return ['openrouter', 'google', 'groq', 'cerebras', 'sail', 'bai', 'radeon', 'sambanova', 'nvidia', 'mistral', 'cohere', 'cloudflare', 'zhipu', 'ollama', 'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'routeway', 'bazaarlink', 'ainative', 'aion', 'requesty', 'navy', 'nara', 'sealion', 'orcarouter', 'unorouter', 'xkiro', 'anyapi', 'modelscope', 'aihorde'].includes(platform);
 }
 
