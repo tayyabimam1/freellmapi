@@ -47,6 +47,15 @@ describe('renewable audio routes', () => {
     expect((await runSpeech(model, { input: 'hello', voice: 'alloy' })).audio).toEqual(mp3);
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ model, input: 'hello', voice_id: 'gb_jane_neutral', response_format: 'mp3' });
   });
+  it('routes Fish Audio only to the tested free MP3 TTS model', async () => {
+    seed('fishaudio', 's2.1-pro-free', 'audio');
+    const fetch = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mp3, { headers: { 'content-type': 'audio/mpeg' } }));
+    const result = await runSpeech('s2.1-pro-free', { input: 'hello' });
+    expect(result.contentType).toBe('audio/mpeg');
+    expect(fetch.mock.calls[0][0]).toBe('https://api.fish.audio/v1/tts');
+    expect(new Headers(fetch.mock.calls[0][1]?.headers).get('model')).toBe('s2.1-pro-free');
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ text: 'hello', format: 'mp3' });
+  });
   it.each(['@cf/deepgram/aura-1', '@cf/deepgram/aura-2-en', '@cf/deepgram/aura-2-es'])('uses text and binary MP3 for %s', async model => {
     seed('cloudflare', model, 'audio');
     const fetch = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mp3));

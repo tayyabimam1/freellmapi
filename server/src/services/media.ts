@@ -20,6 +20,7 @@ import { assessProviderUrl } from '../lib/url-guard.js';
 import { isOnCooldown, setCooldown } from './ratelimit.js';
 import { markKeyHealthyFromRequest } from './health.js';
 import { SPEECHIFY_BASE_URL, SPEECHIFY_VERSION } from '../providers/speechify.js';
+import { FISH_AUDIO_BASE_URL, FISH_AUDIO_FREE_ENDS_AT } from '../providers/fishaudio.js';
 import { TYPHOON_BASE_URL } from '../providers/typhoon.js';
 import { ELECTRONHUB_BASE_URL } from '../providers/electronhub.js';
 import { FREEAI_BASE_URL, freeAiAudioUrl } from '../providers/freeai.js';
@@ -33,7 +34,7 @@ import { meterCloudflare, type CloudflareNeuronCapError } from './cloudflare-neu
 
 /** Platforms with a media adapter below. catalog-sync gates media rows on this
  *  (decoupled from the chat provider registry — e.g. SiliconFlow is media-only). */
-export const MEDIA_PLATFORMS = new Set(['nvidia', 'pollinations', 'cloudflare', 'siliconflow', 'google', 'speechify', 'electronhub', 'freeai', 'kenari', 'plugsky', 'ovh', 'mistral', 'novai', 'varosity', 'rime', 'groq']);
+export const MEDIA_PLATFORMS = new Set(['nvidia', 'pollinations', 'cloudflare', 'siliconflow', 'google', 'speechify', 'electronhub', 'freeai', 'kenari', 'plugsky', 'ovh', 'mistral', 'novai', 'varosity', 'rime', 'groq', 'fishaudio']);
 
 /** Video uses a dedicated optional catalog registry so binaries that predate
  *  this modality ignore the rows instead of accidentally ingesting them as
@@ -859,6 +860,20 @@ async function callSpeechProvider(
       return nativeMediaResult(rimeSpeech(row.model_id, key, p));
     case 'varosity':
       return nativeMediaResult(varositySpeech(row.model_id, key, p));
+    case 'fishaudio': {
+      if (row.model_id !== 's2.1-pro-free') throw new MediaError('Fish Audio free API supports only s2.1-pro-free', 400);
+      if (Date.now() >= FISH_AUDIO_FREE_ENDS_AT) throw new MediaError('Fish Audio S2.1 Pro Free offer has ended; disable its hosted catalog row', 402);
+      if (p.format && p.format !== 'mp3') throw new MediaError('Fish Audio adapter currently supports mp3 output', 400);
+      const openAiVoices = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
+      const r = await mediaFetch(`${FISH_AUDIO_BASE_URL}/v1/tts`, 'fishaudio', 'audio', {
+        method: 'POST', redirect: 'error',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, model: row.model_id },
+        body: JSON.stringify({ text: p.input, format: 'mp3', ...(p.voice && !openAiVoices.has(p.voice.toLowerCase()) ? { reference_id: p.voice } : {}) }),
+      });
+      const audio = Buffer.from(await r.arrayBuffer());
+      if (audio.length < 10 || !r.headers.get('content-type')?.toLowerCase().startsWith('audio/')) throw new MediaError('Fish Audio returned no recognized audio bytes', 502);
+      return { audio, contentType: r.headers.get('content-type')! };
+    }
     case 'freeai': {
       if (!key) throw new MediaError('Free.ai API key required', 401);
       if (!['kokoro', 'melotts', 'chatterbox', 'qwen3-tts', 'vibevoice'].includes(row.model_id)) throw new MediaError('Free.ai speech model is not a tested free route', 400);
