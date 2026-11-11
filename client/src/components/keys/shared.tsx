@@ -35,6 +35,10 @@ export const PLATFORMS: { value: Platform; label: string; url: string; keyless?:
   { value: 'kenari', label: 'Kenari (shared daily free chat and images)', url: 'https://kenari.id' },
   { value: 'kiosapi', label: 'KiosAPI (shared daily free chat)', url: 'https://kiosapi.id/dashboard/keys' },
   { value: 'beatapi', label: 'BeatAPI (JEV decisions; temporary free offer)', url: 'https://beatapi.io' },
+  // #1804: decision-only and keyless. Listed here so the Keys page can add the
+  // anonymous sentinel the decision router needs to consider them configured.
+  { value: 'halx', label: 'HAL-X (keyless decisions)', url: 'https://hal-x.ai', keyless: true },
+  { value: 'aisense', label: 'AI SENSE (keyless decisions)', url: 'https://www.aisense.no/free-public-api-decide-api-endpoint', keyless: true },
   { value: 'apinex', label: 'APINex (shared daily free chat and decisions)', url: 'https://apinex.bond/keys' },
   { value: 'onomeo', label: 'onomeo (30 free calls / 5 hours, shared)', url: 'https://onomeo.com/dashboard' },
   { value: 'iteracompute', label: 'IteraCompute (30M free tokens / month, shared)', url: 'https://iteracompute.com/free/' },
@@ -49,7 +53,7 @@ export const PLATFORMS: { value: Platform; label: string; url: string; keyless?:
   { value: 'jamai', label: 'JamAI Base (monthly ELLM allowance)', url: 'https://cloud.jamaibase.com' },
   { value: 'nabh', label: 'nabh.cloud (50 shared monthly credits)', url: 'https://app.nabh.cloud' },
   { value: 'novai', label: 'NovAI (daily free chat + video quota)', url: 'https://aiapi-pro.com' },
-  { value: 'varosity', label: 'Varosity (shared daily media credits)', url: 'https://varosity.ai/app/keys/api-keys' },
+  { value: 'varosity', label: 'Varosity (one-time $1.50 starter credit)', url: 'https://varosity.ai/app/keys/api-keys' },
   { value: 'rime', label: 'Rime (shared monthly TTS / transcription credits)', url: 'https://app.rime.ai' },
   { value: 'freetts', label: 'FreeTTS (personal use only; watermarked TTS)', url: 'https://freetts.org/dashboard?section=api-keys' },
   { value: 'freeinference', label: 'FreeInference (research; requests logged)', url: 'https://freeinference.org' },
@@ -136,6 +140,8 @@ export const CUSTOM_MODEL_KIND_LABEL: Record<ApiKeyModel['kind'], string> = {
   image: 'keys.customTypeImage',
   audio: 'keys.customTypeAudio',
   transcription: 'keys.customTypeTranscription',
+  search: 'keys.customTypeSearch',
+  decision: 'keys.customTypeDecision',
 }
 
 export function customModelDeleteKey(model: ApiKeyModel): string {
