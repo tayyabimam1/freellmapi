@@ -79,7 +79,7 @@ export interface DecisionRoutingStatus {
 // How the gateway picks between several keys of ONE platform, once a model has
 // been chosen (#919). Separate from RoutingStrategy, which ranks models: the
 // two are independent knobs and the Fallback page sets them side by side.
-export type KeySelectionStrategy = 'auto' | 'least-remaining'
+export type KeySelectionStrategy = 'auto' | 'least-remaining' | 'round-robin'
 
 export type RoutingWeights = { reliability: number; speed: number; intelligence: number }
 
@@ -456,6 +456,7 @@ export const platformColors: Record<string, string> = {
   clod:         '#16a34a',
   speechify:    '#7c3aed',
   freeai:       '#16a34a',
+  roboflow:    '#6d28d9',
   blaze:        '#f97316',
   lucidity:     '#6366f1',
   airforce:     '#0ea5e9',
